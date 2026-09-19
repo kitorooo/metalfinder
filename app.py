@@ -13,6 +13,21 @@ if "step" not in st.session_state:
 def get_recommendations(genres, excluded, vibe, tempo, obscurity):
     client = Groq(api_key=GROQ_API_KEY)
     
+    # 1. Автоматически получаем список доступных моделей аккаунта
+    models_data = client.models.list()
+    available_model_ids = [m.id for m in models_data.data]
+    
+    # Приоритетный выбор: ищем llama-3, qwen, mixtral или берем первую доступную
+    selected_model = None
+    for pref in ["llama-3", "llama3", "mixtral", "gemma"]:
+        match = next((m for m in available_model_ids if pref in m.lower()), None)
+        if match:
+            selected_model = match
+            break
+            
+    if not selected_model:
+        selected_model = available_model_ids[0]
+        
     genres_str = ", ".join(genres) if genres else "Любые в рамках тяжелой сцены"
     excluded_str = excluded if excluded else "Нет исключений"
     
@@ -26,7 +41,7 @@ def get_recommendations(genres, excluded, vibe, tempo, obscurity):
     - Желаемый темп/динамика: {tempo}
     - Уровень андерграундности (от 1 до 10): {obscurity}
 
-    Верни ответ СТРОГО в виде чистого JSON-списка:
+    Верни ответ СТРОГО в виде JSON-списка:
     [
       {{
         "band": "Название группы",
@@ -40,17 +55,18 @@ def get_recommendations(genres, excluded, vibe, tempo, obscurity):
     """
     
     response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
+        model=selected_model,
         messages=[
             {"role": "system", "content": "Ты музыкальный эксперт. Отвечай только валидным JSON-массивом."},
             {"role": "user", "content": prompt}
-        ],
-        response_format={"type": "json_object"} if False else None
+        ]
     )
     
     content = response.choices[0].message.content.strip()
     if content.startswith("```json"):
         content = content[7:]
+    elif content.startswith("```"):
+        content = content[3:]
     if content.endswith("```"):
         content = content[:-3]
         
