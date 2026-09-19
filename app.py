@@ -13,6 +13,13 @@ if "step" not in st.session_state:
 def get_recommendations(genres, excluded, vibe, tempo, obscurity):
     client = Groq(api_key=GROQ_API_KEY)
     
+    # Получаем все модели и отбираем те, что не являются guard/moderation/whisper
+    all_models = [m.id for m in client.models.list().data]
+    chat_models = [
+        m for m in all_models 
+        if not any(bad in m.lower() for bad in ["guard", "safetensor", "whisper", "vision", "embed"])
+    ]
+    
     genres_str = ", ".join(genres) if genres else "Любые в рамках тяжелой сцены"
     excluded_str = excluded if excluded else "Нет исключений"
     
@@ -38,9 +45,9 @@ def get_recommendations(genres, excluded, vibe, tempo, obscurity):
       }}
     ]
     """
-    
-    # Используем проверенную разговорную модель напрямую
-    for model_name in ["llama-3.1-8b-instant", "mixtral-8x7b-32768"]:
+
+    last_err = None
+    for model_name in chat_models:
         try:
             response = client.chat.completions.create(
                 model=model_name,
@@ -54,10 +61,11 @@ def get_recommendations(genres, excluded, vibe, tempo, obscurity):
             if content.endswith("```"):
                 content = content[:-3]
             return json.loads(content.strip())
-        except Exception:
+        except Exception as e:
+            last_err = f"{model_name} -> {e}"
             continue
             
-    raise RuntimeError("Не удалось получить ответ ни от одной разговорной модели.")
+    raise RuntimeError(f"Сбой моделей. Доступные: {chat_models}. Последняя ошибка: {last_err}")
 
 # --- ЭКРАН 1: ГЛАВНАЯ ---
 if st.session_state.step == 1:
