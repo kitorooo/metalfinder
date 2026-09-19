@@ -24,46 +24,46 @@ def get_recommendations(genres, excluded, vibe, tempo, obscurity):
     excluded_str = excluded if excluded else "Нет исключений"
     
     full_prompt = f"""
-    Ты строгий музыкальный эксперт-архивариус по тяжелой сцене (Metal, Post-Punk, Shoegaze, Ambient и т.д.).
+    Ты эксперт Metal-Archives и Discogs по тяжелой сцене.
     
-    Подбери ровно 5 РЕАЛЬНО СУЩЕСТВУЮЩИХ полноформатных альбомов под параметры:
+    Подбери ровно 5 РЕАЛЬНЫХ полноформатных альбомов:
     - Жанры: {genres_str}
     - Исключить: {excluded_str}
-    - Вайб / настроение: "{vibe}"
-    - Темп: {tempo}
-    - Андерграундность (1-10): {obscurity}
+    - Вайб: "{vibe}"
+    - Динамика: {tempo}
+    - Андерграундность: {obscurity}/10
 
-    КРИТИЧЕСКИЕ ТРЕБОВАНИЯ К ДОСТОВЕРНОСТИ:
-    1. Названия групп, альбомов и треков должны быть НА 100% ПОДЛИННЫМИ.
-    2. Поле "key_track" ОБЯЗАНО быть реальным треком с указанного альбома. Запрещено выдумывать названия.
-    3. Поле "year" — точный год оригинального релиза.
+    СТРОЖАЙШИЕ ПРАВИЛА ВАЛИДАЦИИ:
+    1. Группа и альбом ОБЯЗАНЫ существовать в реальности. Запрещено придумывать несуществующие релизы.
+    2. Трек (key_track) ОБЯЗАН физически входить в официальный треклист именно этого альбома (укажи также его номер на диске, например: "Sur l'océan couleur de fer (Track 4)").
+    3. Год релиза (year) должен быть годом первого официального издания.
 
-    Верни ответ СТРОГО в формате JSON-списка без лишних символов:
+    Верни ответ строго списком JSON:
     [
       {{
-        "band": "Точное название группы",
-        "album": "Точное название альбома",
-        "year": "Год",
+        "band": "Название группы",
+        "album": "Название альбома",
+        "year": "Год выпуска",
         "genre": "Поджанр",
-        "key_track": "Реально существующий трек с этого альбома",
+        "key_track": "Название реального трека с этого альбома (Track N)",
         "reason": "Почему подходит под вайб (2-3 предложения на русском)"
       }}
     ]
     """
 
+    # Список моделей по приоритету знаний: сначала тяжелые 70B, затем Mixtral
+    candidate_models = ["llama-3.3-70b-versatile", "llama3-70b-8192", "mixtral-8x7b-32768", "llama-3.1-8b-instant"]
+    
     last_err = None
-    for model_name in chat_models:
+    for model_name in candidate_models:
         try:
             response = client.chat.completions.create(
                 model=model_name,
                 messages=[
-                    {
-                        "role": "system", 
-                        "content": "Ты музыкальная энциклопедия. Ты оперируешь только реальными фактами, существующими дискографиями и точными треклистами. Любая выдумка названий строго запрещена."
-                    },
+                    {"role": "system", "content": "Ты музыкальный архивариус. Отвечай только реальными фактами и альбомами. Выдумка запрещена."},
                     {"role": "user", "content": full_prompt}
                 ],
-                temperature=0.2  # Зажимаем креативность: минимум выдумок, максимум фактов
+                temperature=0.1
             )
             content = response.choices[0].message.content.strip()
             if content.startswith("```json"):
@@ -76,9 +76,8 @@ def get_recommendations(genres, excluded, vibe, tempo, obscurity):
         except Exception as e:
             last_err = f"{model_name} -> {e}"
             continue
-            
-    raise RuntimeError(f"Сбой моделей. Доступные: {chat_models}. Последняя ошибка: {last_err}")
 
+    raise RuntimeError(f"Сбой: {last_err}")
 # --- ЭКРАН 1: ГЛАВНАЯ ---
 if st.session_state.step == 1:
     st.title("🕯️ Heavy Music Finder")
