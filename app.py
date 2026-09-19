@@ -1,12 +1,18 @@
+import sys
+import os
+
+# Принудительно ставим UTF-8 для всего скрипта
+os.environ["PYTHONIOENCODING"] = "utf-8"
+
 import streamlit as st
 import json
 from google import genai
 from google.genai import types
 
-# Вставь сюда свой API-ключ Gemini
-GEMINI_API_KEY = "ВСТАВЬ_СВОЙ_КЛЮЧ_СЮДА"
-
 st.set_page_config(page_title="Heavy Music Finder", layout="centered")
+
+# Берём ключ из настроек хостинга (Secrets) или прямо из кода
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AQ.Ab8RN6LFF0NaUbHo6pDn5Xbv4kUduO37ggQFUIMHHCAd5194BA")
 
 if "step" not in st.session_state:
     st.session_state.step = 1
@@ -14,25 +20,28 @@ if "step" not in st.session_state:
 def get_recommendations(genres, excluded, vibe, tempo, obscurity):
     client = genai.Client(api_key=GEMINI_API_KEY)
     
-    prompt = f"""
-    Ты эксперт по тяжелой, андеграундной и атмосферной музыке (Black Metal, Death Metal, Doom, Post-Punk, Shoegaze, Sludge, Drone и т.д.).
+    genres_str = ", ".join(genres) if genres else "Любые в рамках тяжелой сцены"
+    excluded_str = excluded if excluded else "Нет исключений"
     
-    Подбери ровно 5 полноформатных музыкальных альбомов под следующий запрос:
-    - Предпочтительные направления: {', '.join(genres) if genres else 'Любые в рамках тяжелой сцены'}
-    - Исключить группы: {excluded if excluded else 'Нет исключений'}
-    - Описание вайба / настроения: "{vibe}"
-    - Желаемый темп/динамика: {tempo}
-    - Уровень андерграундности (от 1 до 10): {obscurity}
+    prompt = f"""
+    You are an expert in underground and heavy music (Black Metal, Death Metal, Doom, Post-Punk, Shoegaze, Sludge, Drone, etc.).
+    
+    Recommend exactly 5 full-length music albums matching these criteria:
+    - Preferred genres: {genres_str}
+    - Exclude bands: {excluded_str}
+    - Mood / Vibe description: "{vibe}"
+    - Tempo / Dynamics: {tempo}
+    - Obscurity level (from 1 to 10): {obscurity}
 
-    Верни ответ СТРОГО в виде JSON списка:
+    Return the answer STRICTLY in JSON format with explanations written in Russian:
     [
       {{
-        "band": "Название группы",
-        "album": "Название альбома",
-        "year": "Год выпуска",
-        "genre": "Точный поджанр",
-        "key_track": "Ключевой трек для ознакомления",
-        "reason": "Почему этот альбом подходит под настроение (2-3 предложения)"
+        "band": "Band name",
+        "album": "Album title",
+        "year": "Release year",
+        "genre": "Exact subgenre",
+        "key_track": "Key track title",
+        "reason": "2-3 sentences in Russian explaining why this album matches the requested vibe"
       }}
     ]
     """
