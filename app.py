@@ -40,7 +40,7 @@ def get_recommendations(genres, excluded, vibe, tempo, obscurity):
     """
     
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="llama-3.1-8b-instant",
         messages=[
             {"role": "system", "content": "Ты музыкальный эксперт. Отвечай только валидным JSON-массивом."},
             {"role": "user", "content": prompt}
