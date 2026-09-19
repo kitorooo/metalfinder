@@ -1,59 +1,60 @@
-import sys
-import os
-
-# Принудительно ставим UTF-8 для всего скрипта
-os.environ["PYTHONIOENCODING"] = "utf-8"
-
 import streamlit as st
 import json
-from google import genai
-from google.genai import types
+from groq import Groq
+
+# Твой ключ от Groq
+GROQ_API_KEY = "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"
 
 st.set_page_config(page_title="Heavy Music Finder", layout="centered")
-
-# Берём ключ из настроек хостинга (Secrets) или прямо из кода
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AQ.Ab8RN6LFF0NaUbHo6pDn5Xbv4kUduO37ggQFUIMHHCAd5194BA")
 
 if "step" not in st.session_state:
     st.session_state.step = 1
 
 def get_recommendations(genres, excluded, vibe, tempo, obscurity):
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    client = Groq(api_key=GROQ_API_KEY)
     
     genres_str = ", ".join(genres) if genres else "Любые в рамках тяжелой сцены"
     excluded_str = excluded if excluded else "Нет исключений"
     
     prompt = f"""
-    You are an expert in underground and heavy music (Black Metal, Death Metal, Doom, Post-Punk, Shoegaze, Sludge, Drone, etc.).
+    Ты эксперт по тяжелой, андеграундной и атмосферной музыке (Black Metal, Death Metal, Doom, Post-Punk, Shoegaze, Sludge, Drone и т.д.).
     
-    Recommend exactly 5 full-length music albums matching these criteria:
-    - Preferred genres: {genres_str}
-    - Exclude bands: {excluded_str}
-    - Mood / Vibe description: "{vibe}"
-    - Tempo / Dynamics: {tempo}
-    - Obscurity level (from 1 to 10): {obscurity}
+    Подбери ровно 5 полноформатных музыкальных альбомов под следующий запрос:
+    - Предпочтительные направления: {genres_str}
+    - Исключить группы: {excluded_str}
+    - Описание вайба / настроения: "{vibe}"
+    - Желаемый темп/динамика: {tempo}
+    - Уровень андерграундности (от 1 до 10): {obscurity}
 
-    Return the answer STRICTLY in JSON format with explanations written in Russian:
+    Верни ответ СТРОГО в виде чистого JSON-списка:
     [
       {{
-        "band": "Band name",
-        "album": "Album title",
-        "year": "Release year",
-        "genre": "Exact subgenre",
-        "key_track": "Key track title",
-        "reason": "2-3 sentences in Russian explaining why this album matches the requested vibe"
+        "band": "Название группы",
+        "album": "Название альбома",
+        "year": "Год выпуска",
+        "genre": "Точный поджанр",
+        "key_track": "Ключевой трек для ознакомления",
+        "reason": "Почему этот альбом подходит под настроение (2-3 предложения на русском языке)"
       }}
     ]
     """
     
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json"
-        )
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": "Ты музыкальный эксперт. Отвечай только валидным JSON-массивом."},
+            {"role": "user", "content": prompt}
+        ],
+        response_format={"type": "json_object"} if False else None
     )
-    return json.loads(response.text)
+    
+    content = response.choices[0].message.content.strip()
+    if content.startswith("```json"):
+        content = content[7:]
+    if content.endswith("```"):
+        content = content[:-3]
+        
+    return json.loads(content.strip())
 
 # --- ЭКРАН 1: ГЛАВНАЯ ---
 if st.session_state.step == 1:
@@ -110,7 +111,7 @@ elif st.session_state.step == 4:
     st.caption(f"Запрос: *{st.session_state.vibe_query}*")
     
     if "results" not in st.session_state:
-        with st.spinner("Нейросеть вглядывается в бездну и ищет релизы..."):
+        with st.spinner("Нейросеть ищет релизы..."):
             try:
                 albums = get_recommendations(
                     st.session_state.fav_genres,
