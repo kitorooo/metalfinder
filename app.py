@@ -13,25 +13,10 @@ if "step" not in st.session_state:
 def get_recommendations(genres, excluded, vibe, tempo, obscurity):
     client = Groq(api_key=GROQ_API_KEY)
     
-    # 1. Автоматически получаем список доступных моделей аккаунта
-    models_data = client.models.list()
-    available_model_ids = [m.id for m in models_data.data]
-    
-    # Приоритетный выбор: ищем llama-3, qwen, mixtral или берем первую доступную
-    selected_model = None
-    for pref in ["llama-3", "llama3", "mixtral", "gemma"]:
-        match = next((m for m in available_model_ids if pref in m.lower()), None)
-        if match:
-            selected_model = match
-            break
-            
-    if not selected_model:
-        selected_model = available_model_ids[0]
-        
     genres_str = ", ".join(genres) if genres else "Любые в рамках тяжелой сцены"
     excluded_str = excluded if excluded else "Нет исключений"
     
-    prompt = f"""
+    full_prompt = f"""
     Ты эксперт по тяжелой, андеграундной и атмосферной музыке (Black Metal, Death Metal, Doom, Post-Punk, Shoegaze, Sludge, Drone и т.д.).
     
     Подбери ровно 5 полноформатных музыкальных альбомов под следующий запрос:
@@ -54,23 +39,25 @@ def get_recommendations(genres, excluded, vibe, tempo, obscurity):
     ]
     """
     
-    response = client.chat.completions.create(
-        model=selected_model,
-        messages=[
-            {"role": "system", "content": "Ты музыкальный эксперт. Отвечай только валидным JSON-массивом."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    
-    content = response.choices[0].message.content.strip()
-    if content.startswith("```json"):
-        content = content[7:]
-    elif content.startswith("```"):
-        content = content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-        
-    return json.loads(content.strip())
+    # Используем проверенную разговорную модель напрямую
+    for model_name in ["llama-3.1-8b-instant", "mixtral-8x7b-32768"]:
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "user", "content": full_prompt}]
+            )
+            content = response.choices[0].message.content.strip()
+            if content.startswith("```json"):
+                content = content[7:]
+            elif content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            return json.loads(content.strip())
+        except Exception:
+            continue
+            
+    raise RuntimeError("Не удалось получить ответ ни от одной разговорной модели.")
 
 # --- ЭКРАН 1: ГЛАВНАЯ ---
 if st.session_state.step == 1:
